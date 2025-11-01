@@ -2,78 +2,50 @@
 <html>
 <head>
   <title>Update Project Dates</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 30px; }
-    label { display: inline-block; width: 120px; }
-    input, select { margin-bottom: 10px; }
-    button { margin-right: 10px; }
-    table { border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px 12px; }
-    th { background-color: #f2f2f2; }
-  </style>
 </head>
 <body>
   <h2>Project Date Form</h2>
 
+  <!-- Existing Projects -->
   <label for="projectSelect">Select Project:</label>
   <select id="projectSelect"></select>
+  <br><br>
+
+  <label for="projectDate">Date:</label>
   <input type="date" id="projectDate">
   <button onclick="updateProject()">Update Existing Project</button>
   <br><br>
 
+  <!-- Add New Project -->
   <label for="newProject">Add New Project:</label>
   <input type="text" id="newProject" placeholder="Project name">
   <input type="date" id="newProjectDate">
   <button onclick="addProject()">Add New Project</button>
 
-  <h3>Existing Projects</h3>
-  <table id="projectsTable">
-    <thead>
-      <tr><th>Project</th><th>Date</th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
   <script>
-    // -------------------------
-    // GitHub API configuration
-    // -------------------------
+    // ⚠️ Your GitHub token (keep it secret)
     const token = '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';
-    const repo = 'fabdav/bq-parameters'; // your username/repo
-    const filePath = 'projects.csv';      // path to CSV in repo
+
+    // Repository info
+    const repo = 'fabdav/bq-parameters'; // username/repo
+    const filePath = 'project.csv';      // CSV path
     const branch = 'main';
     const apiUrl = `https://api.github.com/repos/${repo}/contents/${filePath}`;
+    const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${filePath}`;
 
     let projects = {};
-    let fileSha = '';
 
-    // -------------------------
-    // Load CSV and populate form
-    // -------------------------
-    async function loadCSV() {
-      try {
-        const res = await fetch(apiUrl + `?ref=${branch}`, {
-          headers: {
-            'Authorization': `token ${token}`,
-            'Accept': 'application/vnd.github.v3+json'
-          }
-        });
-        const data = await res.json();
-        fileSha = data.sha; // needed to update file
-
-        const csvText = atob(data.content.replace(/\n/g, ''));
-        const lines = csvText.trim().split('\n');
+    // Load CSV into dropdown
+    fetch(rawUrl)
+      .then(res => res.text())
+      .then(text => {
+        const lines = text.trim().split('\n');
         lines.slice(1).forEach(line => {
           const [proj, date] = line.split(',');
           projects[proj] = date;
         });
         populateDropdown();
-        populateTable();
-      } catch (err) {
-        console.error('Error loading CSV:', err);
-        alert('Error loading CSV. Make sure the file exists.');
-      }
-    }
+      });
 
     function populateDropdown() {
       const select = document.getElementById('projectSelect');
@@ -86,30 +58,14 @@
       }
     }
 
-    function populateTable() {
-      const tbody = document.getElementById('projectsTable').querySelector('tbody');
-      tbody.innerHTML = '';
-      for (const proj in projects) {
-        const row = document.createElement('tr');
-        row.innerHTML = `<td>${proj}</td><td>${projects[proj]}</td>`;
-        tbody.appendChild(row);
-      }
-    }
-
-    // -------------------------
-    // Update existing project
-    // -------------------------
     function updateProject() {
       const proj = document.getElementById('projectSelect').value;
       const date = document.getElementById('projectDate').value;
-      if (!proj || !date) { alert('Select a project and date'); return; }
+      if (!proj || !date) { alert('Select project and date'); return; }
       projects[proj] = date;
       saveCSV();
     }
 
-    // -------------------------
-    // Add new project
-    // -------------------------
     function addProject() {
       const proj = document.getElementById('newProject').value;
       const date = document.getElementById('newProjectDate').value;
@@ -118,52 +74,44 @@
       saveCSV();
     }
 
-    // -------------------------
-    // Save CSV back to GitHub
-    // -------------------------
     async function saveCSV() {
-      try {
-        let content = 'project,date\n';
-        for (const p in projects) {
-          content += `${p},${projects[p]}\n`;
-        }
-        const fileBase64 = btoa(content);
+      let content = 'project,date\n';
+      for (const p in projects) {
+        content += `${p},${projects[p]}\n`;
+      }
+      const fileBase64 = btoa(content);
 
-        const res = await fetch(apiUrl, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `token ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            message: 'Update projects.csv',
-            content: fileBase64,
-            branch: branch,
-            sha: fileSha
-          })
-        });
+      // Step 1: Get current SHA
+      const getRes = await fetch(apiUrl, {
+        headers: { 'Authorization': `token ${token}` }
+      });
+      if (!getRes.ok) { alert('Error getting file metadata'); return; }
+      const fileData = await getRes.json();
+      const sha = fileData.sha;
 
-        if (res.ok) {
-          alert('CSV updated!');
-          const data = await res.json();
-          fileSha = data.content.sha;
-          populateDropdown();
-          populateTable();
-        } else {
-          const text = await res.text();
-          console.error('Error updating CSV:', text);
-          alert('Error updating CSV. Check console.');
-        }
-      } catch (err) {
-        console.error('Error:', err);
-        alert('Error updating CSV. Check console.');
+      // Step 2: Update CSV
+      const res = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: 'Update project.csv',
+          content: fileBase64,
+          branch: branch,
+          sha: sha
+        })
+      });
+
+      if (res.ok) {
+        alert('CSV updated successfully!');
+        populateDropdown();
+      } else {
+        alert('Error updating CSV');
+        console.log(await res.text());
       }
     }
-
-    // -------------------------
-    // Initialize
-    // -------------------------
-    loadCSV();
   </script>
 </body>
 </html>
