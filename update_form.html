@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Update Project Date</title>
+</head>
+<body>
+  <h2>Update Project Date</h2>
+  <form id="updateForm">
+    Project: <input type="text" id="project" required><br><br>
+    Date: <input type="date" id="date" required><br><br>
+    <button type="submit">Submit</button>
+  </form>
+
+  <script>
+    // Your GitHub personal access token
+    const token = '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';
+
+    // Repository info
+    const repo = 'fabdav/bq-parameters';
+    const path = 'as_of_date.csv';
+
+    document.getElementById('updateForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const project = document.getElementById('project').value;
+      const date = document.getElementById('date').value;
+
+      try {
+        // Fetch current CSV to get SHA
+        const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`);
+        const data = await res.json();
+        const sha = data.sha;
+
+        // Decode current CSV
+        const currentContent = atob(data.content);
+        let lines = currentContent.split('\n');
+
+        // Replace row if project exists
+        let found = false;
+        lines = lines.map(line => {
+          if (line.startsWith(project + ',')) {
+            found = true;
+            return `${project},${date}`;
+          } else {
+            return line;
+          }
+        });
+        if (!found) {
+          lines.push(`${project},${date}`);
+        }
+
+        const newContent = lines.join('\n');
+
+        // Update CSV via GitHub API
+        const updateRes = await fetch(`https://api.github.com/repos/${repo}/cont
